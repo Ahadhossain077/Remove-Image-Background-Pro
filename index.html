@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Universal AI BG Master</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/downloadjs/1.4.8/download.min.js"></script>
+    <style>
+        :root { --primary: #00d2ff; --bg: #0f0f0f; --card: #1a1a1a; }
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; margin: 0; padding: 0; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: #fff; padding: 15px; display: flex; justify-content: center; min-height: 100vh; }
+        
+        .app-container { width: 100%; max-width: 400px; background: var(--card); padding: 20px; border-radius: 25px; border: 1px solid #333; height: fit-content; box-shadow: 0 15px 35px rgba(0,0,0,0.5); }
+        h2 { text-align: center; color: var(--primary); font-size: 1.3rem; margin-bottom: 20px; letter-spacing: 1px; }
+        
+        .preview-wrapper { 
+            width: 100%; height: 300px; background: #222; border: 2px dashed #444; border-radius: 18px; 
+            margin-bottom: 20px; display: flex; align-items: center; justify-content: center; 
+            position: relative; overflow: hidden; background-size: contain; background-repeat: no-repeat; background-position: center;
+        }
+        
+        #mainImg { max-width: 100%; max-height: 100%; display: none; object-fit: contain; }
+        
+        .controls { display: flex; flex-direction: column; gap: 12px; }
+        .action-btn { 
+            padding: 15px; border-radius: 12px; border: none; font-weight: 600; cursor: pointer;
+            font-size: 0.95rem; text-align: center; transition: 0.3s; 
+        }
+        .btn-secondary { background: #333; color: #ccc; border: 1px solid #444; }
+        #downloadBtn { background: linear-gradient(135deg, #00d2ff, #3a7bd5); color: #fff; display: none; }
+        
+        #loader { position: absolute; background: rgba(0,0,0,0.8); inset: 0; display: none; flex-direction: column; align-items: center; justify-content: center; z-index: 5; }
+        .spinner { border: 3px solid #333; border-top: 3px solid var(--primary); border-radius: 50%; width: 35px; height: 35px; animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        #status { text-align: center; font-size: 0.8rem; color: #777; margin-top: 10px; }
+    </style>
+</head>
+<body>
+
+<div class="app-container">
+    <h2>AI BG MASTER PRO</h2>
+    <div class="preview-wrapper" id="previewBox">
+        <div id="loader"><div class="spinner"></div></div>
+        <img id="mainImg">
+    </div>
+
+    <div class="controls">
+        <label class="action-btn btn-secondary">
+            <input type="file" id="upInp" accept="image/*" style="display:none;">
+            1. Remove Background
+        </label>
+        
+        <label class="action-btn btn-secondary" id="bgLbl" style="display:none;">
+            <input type="file" id="bgInp" accept="image/*" style="display:none;">
+            2. Choose Background
+        </label>
+
+        <button id="downloadBtn" class="action-btn">DOWNLOAD IMAGE</button>
+    </div>
+    <div id="status">Global Device Compatibility Enabled</div>
+</div>
+
+<canvas id="cvs" style="display:none;"></canvas>
+
+<script>
+    const API_KEY = 'DL4BDDMyxpARZrD1tLfqmEqb';
+    const upInp = document.getElementById('upInp');
+    const bgInp = document.getElementById('bgInp');
+    const mainImg = document.getElementById('mainImg');
+    const downloadBtn = document.getElementById('downloadBtn');
+    const loader = document.getElementById('loader');
+    const previewBox = document.getElementById('previewBox');
+    const cvs = document.getElementById('cvs');
+
+    let bgData = null;
+
+    // Optimized Upload & API Call
+    upInp.onchange = async () => {
+        const file = upInp.files[0];
+        if (!file) return;
+
+        loader.style.display = 'flex';
+        const fd = new FormData();
+        fd.append('image_file', file);
+
+        try {
+            const res = await fetch('https://api.remove.bg/v1.0/removebg', {
+                method: 'POST',
+                headers: { 'X-Api-Key': API_KEY },
+                body: fd
+            });
+
+            if (res.ok) {
+                const blob = await res.blob();
+                mainImg.src = URL.createObjectURL(blob);
+                mainImg.style.display = 'block';
+                document.getElementById('bgLbl').style.display = 'block';
+                downloadBtn.style.display = 'block';
+            } else { alert("API Limit Reached or Error."); }
+        } catch (e) { alert("Check Connection."); }
+        finally { loader.style.display = 'none'; }
+    };
+
+    // Background Selection
+    bgInp.onchange = (e) => {
+        const r = new FileReader();
+        r.onload = (ev) => {
+            bgData = ev.target.result;
+            previewBox.style.backgroundImage = `url(${bgData})`;
+        };
+        r.readAsDataURL(e.target.files[0]);
+    };
+
+    // Universal Processing & Safe Download
+    downloadBtn.onclick = () => {
+        const ctx = cvs.getContext('2d');
+        const fg = new Image();
+        const bg = new Image();
+
+        fg.onload = () => {
+            if (bgData) {
+                bg.onload = () => {
+                    cvs.width = bg.width; cvs.height = bg.height;
+                    ctx.drawImage(bg, 0, 0);
+                    ctx.drawImage(fg, 0, 0, bg.width, bg.height);
+                    saveFinal();
+                };
+                bg.src = bgData;
+            } else {
+                cvs.width = fg.width; cvs.height = fg.height;
+                ctx.drawImage(fg, 0, 0);
+                saveFinal();
+            }
+        };
+        fg.src = mainImg.src;
+    };
+
+    function saveFinal() {
+        try {
+            // Quality optimization for mobile devices
+            const finalImage = cvs.toDataURL("image/png", 0.9);
+            // Universal download function
+            download(finalImage, "AI_Edit_Result.png", "image/png");
+        } catch (err) {
+            alert("Storage access denied. Use Long Press to save.");
+        }
+    }
+</script>
+</body>
+</html>
